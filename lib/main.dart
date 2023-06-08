@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -10,12 +11,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Login App',
+      title: 'API endpoints test',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const Login(title: 'Login app'),
+      home: const Login(title: 'API endpoints test'),
     );
   }
 }
@@ -32,6 +33,19 @@ class _LoginState extends State<Login> {
   final _formKey = GlobalKey<FormState>();
   TextEditingController emailController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
+
+  Future<http.Response> postLogin(email, password) async {
+    var url = Uri.parse('http://192.168.29.200/api/auth/login');
+    var data = {
+      'email': email,
+      'password': password,
+    };
+    final response = await http.post(
+      url,
+      body: data,
+    );
+    return response;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,27 +97,32 @@ class _LoginState extends State<Login> {
                 child: Center(
                   child: ElevatedButton(
                     onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        if (emailController.text == "t" &&
-                            passwordController.text == "t") {
+                      postLogin(emailController.text, passwordController.text)
+                          .then((value) {
+                        print(emailController.text);
+                        print(passwordController.text);
+                        if (value.statusCode == 200) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('200 OK - Login successful'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => HomePage(
-                                      email: emailController.text,
-                                    )),
+                              builder: (context) => const Home(),
+                            ),
                           );
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Invalid Credentials')),
+                              content: Text('Login failed'),
+                              duration: Duration(seconds: 1),
+                            ),
                           );
                         }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please fill input')),
-                        );
-                      }
+                      });
                     },
                     child: const Text('Submit'),
                   ),
@@ -117,29 +136,36 @@ class _LoginState extends State<Login> {
   }
 }
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key, required this.email});
+class Home extends StatelessWidget {
+  const Home({super.key});
+  // Create a function to get user data
+  Future<http.Response> getUserData() async {
+    var url = Uri.parse('http://192.168.29.200/api/users/current');
+    var response = await http.get(url);
+    return response;
+  }
 
-  final String email;
-
+  // Display user data on the home screen
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Home Page'),
-        ),
-        body: Column(
-          children: [
-            Text(email),
-            Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text("Go back!"),
-              ),
-            ),
-          ],
-        ));
+      appBar: AppBar(
+        title: const Text('Home'),
+      ),
+      body: FutureBuilder(
+          future: getUserData().then((value) => value.body),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Center(
+                child: Text(snapshot.data.toString()),
+              );
+            } else if (snapshot.hasError) {
+              return Center(
+                child: Text(snapshot.error.toString()),
+              );
+            }
+            return const CircularProgressIndicator();
+          }),
+    );
   }
 }
