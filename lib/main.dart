@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -36,13 +39,15 @@ class _LoginState extends State<Login> {
 
   Future<http.Response> postLogin(email, password) async {
     var url = Uri.parse('http://192.168.29.200/api/auth/login');
-    var data = {
+    // var url = Uri.parse('http://192.168.225.21/api/auth/login');
+    var credentials = {
       'email': email,
       'password': password,
     };
+
     final response = await http.post(
       url,
-      body: data,
+      body: credentials,
     );
     return response;
   }
@@ -99,8 +104,6 @@ class _LoginState extends State<Login> {
                     onPressed: () {
                       postLogin(emailController.text, passwordController.text)
                           .then((value) {
-                        print(emailController.text);
-                        print(passwordController.text);
                         if (value.statusCode == 200) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -108,10 +111,15 @@ class _LoginState extends State<Login> {
                               duration: Duration(seconds: 1),
                             ),
                           );
+                          Map<String, dynamic> data = jsonDecode(value.body);
+                          var token = data['token']['access_token'].toString();
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => const Home(),
+                              settings: RouteSettings(
+                                arguments: token,
+                              ),
                             ),
                           );
                         } else {
@@ -138,33 +146,54 @@ class _LoginState extends State<Login> {
 
 class Home extends StatelessWidget {
   const Home({super.key});
-  // Create a function to get user data
-  Future<http.Response> getUserData() async {
-    var url = Uri.parse('http://192.168.29.200/api/users/current');
-    var response = await http.get(url);
-    return response;
-  }
 
-  // Display user data on the home screen
   @override
   Widget build(BuildContext context) {
+    final String token = ModalRoute.of(context)!.settings.arguments.toString();
+    Future<http.Response> getUserData() async {
+      var url = Uri.parse('http://192.168.29.200/api/users/current');
+      // var url = Uri.parse('http://192.168.225.21/api/users/current');
+      final response = http.get(url, headers: {
+        HttpHeaders.contentTypeHeader: "application/json",
+        HttpHeaders.authorizationHeader: "Bearer $token"
+      });
+      return response;
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const Text('User Details'),
       ),
       body: FutureBuilder(
           future: getUserData().then((value) => value.body),
           builder: (context, snapshot) {
             if (snapshot.hasData) {
-              return Center(
-                child: Text(snapshot.data.toString()),
-              );
-            } else if (snapshot.hasError) {
-              return Center(
-                child: Text(snapshot.error.toString()),
+              Map<String, dynamic> data = jsonDecode(snapshot.data.toString());
+              for (var key in data.keys) {
+                data[key] = data[key].toString();
+              }
+              return ListView.builder(
+                  itemCount: data.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return ListTile(
+                      leading: Text(data.keys.elementAt(index) + ":"),
+                      title: Text(data.values.elementAt(index)),
+                      leadingAndTrailingTextStyle: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 15,
+                      ),
+                      titleTextStyle: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  });
+            } else {
+              return const Center(
+                child: CircularProgressIndicator(),
               );
             }
-            return const CircularProgressIndicator();
           }),
     );
   }
